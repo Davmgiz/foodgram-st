@@ -5,7 +5,7 @@ django-cors-headers==4.6.0
 django-import-export==4.3.3
 django-rest==0.8.7
 djangorestframework==3.15.2
-djangorestframework-simplejwt==5.3.1
+djangorestframework-simplejwt==4.7.2
 gunicorn==23.0.0
 packaging==24.2
 pillow==11.1.0
@@ -14,3 +14,7 @@ PyJWT==2.10.1
 six==1.17.0
 sqlparse==0.5.3
 tablib==3.7.0
+djoser==2.1.0
+django-extensions==3.2.1
+drf-extra-fields==3.7.0
+django-filter==23.1

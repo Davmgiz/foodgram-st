@@ -24,28 +24,29 @@ class Ingredient(models.Model):
 class User(AbstractUser):
     username = models.CharField(
         'Имя пользователя',
-        max_length=128,
+        max_length=150,
         unique=True,
         validators=[UnicodeUsernameValidator],
     )
     email = models.EmailField(
         verbose_name='email',
-        max_length=256,
+        max_length=254,
         unique=True,
     )
     first_name = models.CharField(
         verbose_name='Имя',
-        max_length=128,
+        max_length=150,
     )
     last_name = models.CharField(
         verbose_name='Фамилия',
-        max_length=128,
+        max_length=150,
     )
     avatar = models.ImageField(
         verbose_name='Аватарка',
-        upload_to='users/images/',
+        upload_to='users/',
         null=True,
         blank=True,
+        default='users/default_avatar.png'
     )
 
     USERNAME_FIELD = 'email'
@@ -62,7 +63,7 @@ class User(AbstractUser):
 
 class Recipe(models.Model):
     name = models.CharField(
-        max_length=128,
+        max_length=256,
         verbose_name='Название',
     )
     text = models.TextField(verbose_name='Рецепт')

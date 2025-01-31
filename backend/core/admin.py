@@ -17,12 +17,17 @@ class UserAdmin(admin.ModelAdmin):
     search_fields = ('username', 'email')
     list_filter = ('is_staff', 'is_active')
 
+    def save_model(self, request, obj, form, change):
+        if form.cleaned_data.get('password'):
+            obj.set_password(form.cleaned_data['password'])
+        super().save_model(request, obj, form, change)
+
 
 # Инлайн-редактирование ингредиентов в рецепте
 class RecipeIngredientInline(admin.TabularInline):
     model = RecipeIngredient
-    extra = 1  # Добавляет одну пустую строку для добавления нового ингредиента
-    autocomplete_fields = ('ingredient',)  # Автозаполнение для ингредиентов
+    extra = 1
+    autocomplete_fields = ('ingredient',)
 
 
 # Кастомная админка для модели Recipe
@@ -31,9 +36,8 @@ class RecipeAdmin(admin.ModelAdmin):
     list_display = ('name', 'author', 'cooking_time', 'date_published', 'favorites_count')
     list_filter = ('author', 'cooking_time', 'date_published')
     search_fields = ('name', 'author__username')
-    inlines = [RecipeIngredientInline]  # Добавляем инлайн-редактирование ингредиентов
+    inlines = [RecipeIngredientInline]
 
-    # Метод для подсчёта количества добавлений в избранное
     def favorites_count(self, obj):
         return obj.favorited_by_users.count()
     favorites_count.short_description = 'Добавлено в избранное'  # type: ignore

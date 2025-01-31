@@ -21,12 +21,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-_63y+(bqu@gz$r)(^oh07d3zi=miz6s^l6^$1&6uh0((=-4&35'
-
+SECRET_KEY = os.getenv("SECRET_KEY", "fallback-secret-key")
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+# True = SQLite, False = PostgreSQL
+DEBUG = False
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1,backend").split(",")
 
 
 # Application definition
@@ -38,6 +38,11 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'rest_framework',
+    'rest_framework.authtoken',
+    'django_extensions',
+    'django_filters',
+    'djoser',
     'api',
     'core',
 ]
@@ -76,13 +81,24 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+if DEBUG:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
     }
-}
-
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.getenv('POSTGRES_DB', 'django'),
+            'USER': os.getenv('POSTGRES_USER', 'django'),
+            'PASSWORD': os.getenv('POSTGRES_PASSWORD', 'postgres'),
+            'HOST': os.getenv('DB_HOST', 'db'),
+            'PORT': os.getenv('DB_PORT', '5432'),
+        }
+    }
 
 # Password validation
 # https://docs.djangoproject.com/en/5.1/ref/settings/#auth-password-validators
@@ -129,3 +145,21 @@ AUTH_USER_MODEL = 'core.User'
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.TokenAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticatedOrReadOnly',
+    ],
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.LimitOffsetPagination',
+    'PAGE_SIZE': 6,
+}
+
+DJOSER = {
+    'LOGIN_FIELD': 'email',
+}
+
+STATIC_URL = '/static/'
+STATIC_ROOT = os.path.join(BASE_DIR, 'static')
