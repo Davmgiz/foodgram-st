@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from djoser.serializers import UserCreateSerializer
+from djoser.serializers import UserCreateSerializer, UserSerializer
 from drf_extra_fields.fields import Base64ImageField
 from core.models import (
     Ingredient, Recipe, RecipeIngredient,
@@ -7,7 +7,7 @@ from core.models import (
 )
 
 
-class CustomUserSerializer(serializers.ModelSerializer):
+class CustomUserSerializer(UserSerializer):
     is_subscribed = serializers.SerializerMethodField()
     avatar = serializers.SerializerMethodField()
 

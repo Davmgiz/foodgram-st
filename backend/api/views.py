@@ -1,7 +1,7 @@
 from django.urls import reverse
 from rest_framework import viewsets, status, permissions
 from rest_framework.permissions import AllowAny, IsAuthenticated
-from rest_framework.decorators import action, permission_classes
+from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework import status
 from django.core.files.base import ContentFile
@@ -11,7 +11,7 @@ from core.models import (
     RecipeIngredient, Favorite,
     ShoppingCart, Subscription
 )
-from core.serializers import (
+from api.serializers import (
     CustomUserSerializer,
     CustomUserCreateSerializer,
     IngredientSerializer,
@@ -21,22 +21,23 @@ from core.serializers import (
 )
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
-from core.pagination import PageToOffsetPagination
-from core.filters import RecipeFilter
-import csv
+from api.pagination import PageToOffsetPagination
+from api.filters import RecipeFilter
 from django.http import HttpResponse
 from django.db.models import Sum
 from django.core.exceptions import ValidationError
+from djoser.views import UserViewSet
 
 
-class UserViewSet(viewsets.ModelViewSet):
-    """ViewSet для управления пользователями."""
+class CustomUserViewSet(UserViewSet):
+    """Кастомный ViewSet для управления пользователями с Djoser"""
     queryset = User.objects.all()
     serializer_class = CustomUserSerializer
 
     def get_permissions(self):
+        """Для списка пользователей разрешаем доступ анонимам"""
         if self.action in ['list', 'retrieve', 'create']:
-            return [AllowAny()]
+            return [permissions.AllowAny()]
         return [permissions.IsAuthenticated()]
 
     def get_serializer_class(self):
@@ -44,41 +45,23 @@ class UserViewSet(viewsets.ModelViewSet):
             return CustomUserCreateSerializer
         return CustomUserSerializer
 
-    @action(detail=False, methods=['get'],
-            permission_classes=[permissions.IsAuthenticated])
-    def me(self, request):
-        serializer = self.get_serializer(request.user)
-        return Response(serializer.data)
-
-    @action(detail=False, methods=['post'])
-    def set_password(self, request):
-        user = request.user
-        new_password = request.data.get("new_password")
-        current_password = request.data.get("current_password")
-
-        if not user.check_password(current_password):
-            return Response({"error": "Неправильный текущий пароль"},
-                            status=status.HTTP_400_BAD_REQUEST)
-
-        user.set_password(new_password)
-        user.save()
-        return Response(status=status.HTTP_204_NO_CONTENT)
-
     @action(detail=False, methods=['put'], url_path='me/avatar',
             permission_classes=[permissions.IsAuthenticated])
     def avatar(self, request):
+        """Обновление аватарки пользователя."""
         user = request.user
-
         data = request.data.get('avatar')
+
         if not data:
             raise ValidationError('Вы не передали аватарку')
+
         try:
-            format, str = data.split(';base64,')
+            format, imgstr = data.split(';base64,')
         except ValueError:
-            raise ValidationError(
-                'Недопустимый формат аватарки')
+            raise ValidationError('Недопустимый формат аватарки')
+
         ext = format.split('/')[-1]
-        file = ContentFile(base64.b64decode(str),
+        file = ContentFile(base64.b64decode(imgstr),
                            name=f'avatar{user.id}.{ext}')
         user.avatar = file
         user.save()
@@ -86,6 +69,7 @@ class UserViewSet(viewsets.ModelViewSet):
 
     @avatar.mapping.delete
     def delete_avatar(self, request):
+        """Удаление аватарки пользователя."""
         user = request.user
         user.avatar = 'users/default_avatar.jpg'
         user.save()
@@ -94,28 +78,32 @@ class UserViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'],
             permission_classes=[permissions.IsAuthenticated])
     def subscribe(self, request, pk=None):
+        """Подписка на автора рецептов."""
         author = get_object_or_404(User, pk=pk)
 
         if request.user == author:
             return Response({"error": "Нельзя подписаться на самого себя"},
                             status=status.HTTP_400_BAD_REQUEST)
 
-        _, created = Subscription.objects.get_or_create(user=request.user,
-                                                        author=author)
+        _, created = Subscription.objects.get_or_create(
+            user=request.user, author=author
+        )
+
         if not created:
             return Response({"error": "Вы уже подписаны"},
                             status=status.HTTP_400_BAD_REQUEST)
 
-        return Response(RecipesUserSerializer(
-            author, context={'request': request}
-        ).data, status=status.HTTP_201_CREATED)
+        return Response(
+            RecipesUserSerializer(author, context={'request': request}).data,
+            status=status.HTTP_201_CREATED
+        )
 
     @subscribe.mapping.delete
     def unsubscribe(self, request, pk=None):
+        """Отписка от автора рецептов."""
         author = get_object_or_404(User, pk=pk)
-        subscription = Subscription.objects.filter(
-            user=request.user, author=author
-        )
+        subscription = Subscription.objects.filter(user=request.user,
+                                                   author=author)
 
         if not subscription.exists():
             return Response({"error": "Вы не подписаны на него"},
@@ -127,10 +115,11 @@ class UserViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'],
             permission_classes=[permissions.IsAuthenticated])
     def subscriptions(self, request):
+        """Список подписок текущего пользователя."""
         queryset = User.objects.filter(authors__user=request.user)
         recipes_limit = request.query_params.get('recipes_limit')
-        page = self.paginate_queryset(queryset)
 
+        page = self.paginate_queryset(queryset)
         if page is not None:
             serializer = RecipesUserSerializer(
                 page, many=True, context={'request': request,
@@ -222,34 +211,32 @@ class RecipeViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'],
             permission_classes=[IsAuthenticated])
     def download_shopping_cart(self, request):
-        """Скачивание списка покупок в формате CSV."""
+        """Скачивание списка покупок в формате текста."""
 
         ingredients = RecipeIngredient.objects.filter(
             recipe__in=ShoppingCart.objects.filter(
                 user=request.user
             ).values('recipe')
-
-        ).values(
-            'ingredient__name', 'ingredient__measurement_unit'
-        ).annotate(total_amount=Sum('amount')).order_by('ingredient__name')
+        ).values('ingredient__name', 'ingredient__measurement_unit').annotate(
+            total_amount=Sum('amount')).order_by('ingredient__name')
 
         if not ingredients:
             return Response({'error': 'Корзина пуста'},
                             status=status.HTTP_400_BAD_REQUEST)
 
-        response = HttpResponse(content_type='text/csv; charset=utf-8-sig')
-        response['Content-Disposition'] = ('attachment; filename='
-                                           '"shopping_cart.csv"')
-
-        writer = csv.writer(response, delimiter=';')
-        writer.writerow(['Ингредиент', 'Количество', 'Единица измерения'])
-
+        # Формируем текстовый список покупок
+        shopping_list = "Список покупок:\n\n"
         for item in ingredients:
-            writer.writerow([
-                item['ingredient__name'].capitalize(),
-                item['total_amount'],
-                item['ingredient__measurement_unit']
-            ])
+            shopping_list += (
+                f"- {item['ingredient__name'].capitalize()} "
+                f"({item['total_amount']} "
+                f"{item['ingredient__measurement_unit']})\n"
+            )
+
+        response = HttpResponse(shopping_list,
+                                content_type='text/plain; charset=utf-8-sig')
+        response['Content-Disposition'] = ('attachment; filename='
+                                           '"shopping_list.txt"')
 
         return response
 

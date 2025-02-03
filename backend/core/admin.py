@@ -8,12 +8,17 @@ from .models import (
     Subscription,
     User
 )
+from django.utils.html import format_html
+from django.conf import settings
 
 
 # Кастомная админка для User
 @admin.register(User)
 class UserAdmin(admin.ModelAdmin):
-    list_display = ('username', 'email', 'first_name', 'last_name', 'is_staff')
+    list_display = (
+        'username', 'email', 'first_name',
+        'last_name', 'is_staff', 'avatar_preview'
+    )
     search_fields = ('username', 'email')
     list_filter = ('is_staff', 'is_active')
 
@@ -21,6 +26,24 @@ class UserAdmin(admin.ModelAdmin):
         if form.cleaned_data.get('password'):
             obj.set_password(form.cleaned_data['password'])
         super().save_model(request, obj, form, change)
+
+    def avatar_preview(self, obj):
+        if obj.avatar:
+            return format_html(
+                (
+                    '<img src="{}" width="50" height="50" '
+                    'style="border-radius: 50%;" />'
+                ), obj.avatar.url
+            )
+
+        return format_html(
+            (
+                f'<img src="{settings.MEDIA_URL}users/default_avatar.png" '
+                f'width="50" height="50" style="border-radius: 50%;" />'
+            )
+        )
+
+    avatar_preview.short_description = "Аватар"  # type: ignore
 
 
 # Инлайн-редактирование ингредиентов в рецепте
@@ -33,7 +56,10 @@ class RecipeIngredientInline(admin.TabularInline):
 # Кастомная админка для модели Recipe
 @admin.register(Recipe)
 class RecipeAdmin(admin.ModelAdmin):
-    list_display = ('name', 'author', 'cooking_time', 'date_published', 'favorites_count')
+    list_display = (
+        'name', 'author', 'cooking_time',
+        'date_published', 'favorites_count', 'image_preview'
+    )
     list_filter = ('author', 'cooking_time', 'date_published')
     search_fields = ('name', 'author__username')
     inlines = [RecipeIngredientInline]
@@ -41,6 +67,14 @@ class RecipeAdmin(admin.ModelAdmin):
     def favorites_count(self, obj):
         return obj.favorited_by_users.count()
     favorites_count.short_description = 'Добавлено в избранное'  # type: ignore
+
+    def image_preview(self, obj):
+        if obj.image:
+            return format_html(
+                '<img src="{}" width="80" height="50" />', obj.image.url
+            )
+        return "Нет фото"
+    image_preview.short_description = 'Фото'  # type: ignore
 
 
 # Кастомная админка для модели Ingredient
