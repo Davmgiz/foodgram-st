@@ -1,6 +1,6 @@
 from django.urls import reverse
 from rest_framework import viewsets, status, permissions
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework import status
@@ -21,7 +21,7 @@ from api.serializers import (
 )
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
-from api.pagination import PageToOffsetPagination
+from api.pagination import CustomPagination
 from api.filters import RecipeFilter
 from django.http import HttpResponse
 from django.db.models import Sum
@@ -139,7 +139,7 @@ class RecipeViewSet(viewsets.ModelViewSet):
 
     queryset = Recipe.objects.all().order_by('-date_published')
     serializer_class = RecipeSerializer
-    pagination_class = PageToOffsetPagination
+    pagination_class = CustomPagination
     filter_backends = (DjangoFilterBackend,)
     filterset_class = RecipeFilter
 
