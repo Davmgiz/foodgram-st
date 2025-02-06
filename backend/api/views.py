@@ -8,8 +8,7 @@ from django.core.files.base import ContentFile
 import base64
 from core.models import (
     User, Ingredient, Recipe,
-    RecipeIngredient, Favorite,
-    ShoppingCart, Subscription
+    Favorite, ShoppingCart, Subscription
 )
 from api.serializers import (
     UserProfileSerializer,
@@ -22,33 +21,19 @@ from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
 from api.pagination import PageLimitPagination
 from api.filters import RecipeFilter
-from django.http import HttpResponse
-from django.db.models import Sum
 from django.core.exceptions import ValidationError
 from djoser.views import UserViewSet
-from djoser.serializers import UserCreateSerializer
 from rest_framework import serializers
 from api.permissions import IsOwnerOrReadOnly
 from api.shopping_cart_render import render_shopping_cart
 from django.http import FileResponse
 
 
-class CustomUserViewSet(UserViewSet):
+class UserManagementViewSet(UserViewSet):
     """Кастомный ViewSet для управления пользователями с Djoser"""
     queryset = User.objects.all()
     serializer_class = UserProfileSerializer
     permission_classes = [permissions.AllowAny]
-
-    def get_permissions(self):
-        """Для списка пользователей разрешаем доступ анонимам"""
-        if self.action in ['list', 'retrieve', 'create']:
-            return [permissions.AllowAny()]
-        return [permissions.IsAuthenticated()]
-
-    # def get_serializer_class(self):
-    #     if self.action == 'create':
-    #         return UserCreateSerializer
-    #     return UserProfileSerializer
 
     @action(detail=False, methods=['put'], url_path='me/avatar',
             permission_classes=[permissions.IsAuthenticated])
@@ -141,11 +126,8 @@ class RecipeViewSet(viewsets.ModelViewSet):
     pagination_class = PageLimitPagination
     filter_backends = (DjangoFilterBackend,)
     filterset_class = RecipeFilter
-
-    def get_permissions(self):
-        if self.action in ['list', 'retrieve', 'get_link']:
-            return [permissions.AllowAny()]
-        return [IsOwnerOrReadOnly()]
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly,
+                          IsOwnerOrReadOnly]
 
     def perform_create(self, serializer):
         serializer.save(author=self.request.user)

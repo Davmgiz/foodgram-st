@@ -25,7 +25,7 @@ SECRET_KEY = os.getenv("SECRET_KEY", "fallback-secret-key")
 # SECURITY WARNING: don't run with debug turned on in production!
 
 # True = SQLite, False = PostgreSQL
-DEBUG = False
+DEBUG = True
 
 ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1,backend").split(",")
 
@@ -164,6 +164,13 @@ DJOSER = {
     'SERIALIZERS': {
         'user': 'api.serializers.UserProfileSerializer',
         'current_user': 'api.serializers.UserProfileSerializer',
+    },
+    'PERMISSIONS': {
+        'user_list': ['rest_framework.permissions.AllowAny'],
+
+        'user': ['rest_framework.permissions.AllowAny'],
+
+        'user_create': ['rest_framework.permissions.AllowAny'],
     }
 }
 
