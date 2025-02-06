@@ -1,36 +1,29 @@
-import csv
+import json
 import os
 from django.core.management.base import BaseCommand
 from core.models import Ingredient
 
 
 class Command(BaseCommand):
-    help = "Загружает ингредиенты из CSV-файла"
+    help = "Загружает ингредиенты из JSON-фикстуры"
 
     def handle(self, *args, **kwargs):
-        file_path = os.path.join("data", "ingredients.csv")
+        file_path = os.path.join("data", "ingredients.json")
 
         if not os.path.exists(file_path):
             self.stdout.write(self.style.ERROR(f"Файл {file_path} не найден!"))
             return
 
         with open(file_path, encoding="utf-8") as file:
-            reader = csv.reader(file)
-            next(reader)  # Пропускаем заголовок
+            data = json.load(file)
 
-            ingredients = []
-            for row in reader:
-                if len(row) < 2:
-                    self.stdout.write(
-                        self.style.WARNING(f"Пропущена строка: {row}")
-                    )
-                    continue
-                name, measurement_unit = row
-                ingredients.append(
-                    Ingredient(name=name, measurement_unit=measurement_unit)
-                )
+        created_objects = Ingredient.objects.bulk_create(
+            [Ingredient(**row) for row in data], ignore_conflicts=True
+        )
 
-            Ingredient.objects.bulk_create(ingredients, ignore_conflicts=True)
-            self.stdout.write(
-                self.style.SUCCESS("✅ Данные загружены успешно!")
+        self.stdout.write(
+            self.style.SUCCESS(
+                (f"Данные загружены успешно! Добавлено "
+                 f"{len(created_objects)} записей.")
             )
+        )

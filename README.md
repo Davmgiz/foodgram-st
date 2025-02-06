@@ -36,7 +36,7 @@ docker-compose exec backend python manage.py load_data
 docker-compose exec backend python manage.py createsuperuser
 ```
 
-После выполнения этих шагов приложение будет доступно по адресу **[`http://localhost/`](http://localhost/)**.
+После выполнения этих шагов приложение будет доступно по адресу **[http://localhost/](http://localhost/)**.
 
 ---
 

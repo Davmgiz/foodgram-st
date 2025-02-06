@@ -1,4 +1,7 @@
 from django.contrib import admin
+from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
+from django.utils.safestring import mark_safe
+from django.conf import settings
 from .models import (
     Ingredient,
     Recipe,
@@ -8,42 +11,46 @@ from .models import (
     Subscription,
     User
 )
-from django.utils.html import format_html
-from django.conf import settings
 
 
-# Кастомная админка для User
+# Кастомная админка для User с учетом всех замечаний
 @admin.register(User)
-class UserAdmin(admin.ModelAdmin):
+class UserAdmin(BaseUserAdmin):
+    """Админ-панель для пользователей."""
+
     list_display = (
-        'username', 'email', 'first_name',
-        'last_name', 'is_staff', 'avatar_preview'
+        'id', 'username', 'full_name', 'email', 'avatar_preview',
+        'recipes_count', 'subscriptions_count', 'subscribers_count'
     )
     search_fields = ('username', 'email')
     list_filter = ('is_staff', 'is_active')
 
-    def save_model(self, request, obj, form, change):
-        if form.cleaned_data.get('password'):
-            obj.set_password(form.cleaned_data['password'])
-        super().save_model(request, obj, form, change)
+    @admin.display(description="ФИО")
+    def full_name(self, user):
+        return f"{user.first_name} {user.last_name}"
 
-    def avatar_preview(self, obj):
-        if obj.avatar:
-            return format_html(
-                (
-                    '<img src="{}" width="50" height="50" '
-                    'style="border-radius: 50%;" />'
-                ), obj.avatar.url
-            )
-
-        return format_html(
-            (
-                f'<img src="{settings.MEDIA_URL}users/default_avatar.png" '
-                f'width="50" height="50" style="border-radius: 50%;" />'
-            )
+    @admin.display(description="Аватар")
+    @mark_safe
+    def avatar_preview(self, user):
+        avatar_url = f"{settings.MEDIA_URL}users/default_avatar.png"
+        if user.avatar:
+            avatar_url = user.avatar.url
+        return (
+            f'<img src="{avatar_url}" width="50" '
+            'height="50" style="border-radius: 50%;" />'
         )
 
-    avatar_preview.short_description = "Аватар"  # type: ignore
+    @admin.display(description="Кол-во рецептов")
+    def recipes_count(self, user):
+        return user.recipes.count()
+
+    @admin.display(description="Кол-во подписок")
+    def subscriptions_count(self, user):
+        return user.followers.count()
+
+    @admin.display(description="Кол-во подписчиков")
+    def subscribers_count(self, user):
+        return user.authors.count()
 
 
 # Инлайн-редактирование ингредиентов в рецепте
@@ -56,46 +63,51 @@ class RecipeIngredientInline(admin.TabularInline):
 # Кастомная админка для модели Recipe
 @admin.register(Recipe)
 class RecipeAdmin(admin.ModelAdmin):
+    """Админ-панель для рецептов."""
+
     list_display = (
-        'name', 'author', 'cooking_time',
-        'date_published', 'favorites_count', 'image_preview'
+        'id', 'name', 'cooking_time', 'author', 'favorites_count',
+        'ingredients_list', 'image_preview'
     )
     list_filter = ('author', 'cooking_time', 'date_published')
     search_fields = ('name', 'author__username')
     inlines = [RecipeIngredientInline]
 
-    def favorites_count(self, obj):
-        return obj.favorited_by_users.count()
-    favorites_count.short_description = 'Добавлено в избранное'  # type: ignore
+    @admin.display(description="Добавлено в избранное")
+    def favorites_count(self, recipe):
+        return recipe.favorites.count()
 
-    def image_preview(self, obj):
-        if obj.image:
-            return format_html(
-                '<img src="{}" width="80" height="50" />', obj.image.url
-            )
+    @admin.display(description="Продукты")
+    def ingredients_list(self, recipe):
+        return ", ".join(
+            [ingredient.name for ingredient in recipe.ingredients.all()]
+        )
+
+    @admin.display(description="Фото")
+    @mark_safe
+    def image_preview(self, recipe):
+        if recipe.image:
+            return f'<img src="{recipe.image.url}" width="80" height="50" />'
         return "Нет фото"
-    image_preview.short_description = 'Фото'  # type: ignore
 
 
 # Кастомная админка для модели Ingredient
 @admin.register(Ingredient)
 class IngredientAdmin(admin.ModelAdmin):
-    list_display = ('name', 'measurement_unit')
-    search_fields = ('name',)
-    ordering = ('name',)
+    """Админ-панель для ингредиентов."""
+
+    list_display = ('name', 'measurement_unit', 'recipes_count')
+    search_fields = ('name', 'measurement_unit')
+    list_filter = ('measurement_unit',)
+
+    @admin.display(description="Кол-во рецептов")
+    def recipes_count(self, ingredient):
+        return ingredient.recipes.count()
 
 
-# Кастомная админка для модели RecipeIngredient
-@admin.register(RecipeIngredient)
-class RecipeIngredientAdmin(admin.ModelAdmin):
-    list_display = ('recipe', 'ingredient', 'amount')
-    list_filter = ('recipe', 'ingredient')
-    search_fields = ('recipe__name', 'ingredient__name')
-
-
-# Кастомная админка для модели Favorite
-@admin.register(Favorite)
-class FavoriteAdmin(admin.ModelAdmin):
+# Кастомная админка для моделей Favorite и ShoppingCart
+@admin.register(Favorite, ShoppingCart)
+class FavoriteAndShoppingCartAdmin(admin.ModelAdmin):
     list_display = ('user', 'recipe')
     list_filter = ('user', 'recipe')
     search_fields = ('user__username', 'recipe__name')
@@ -107,11 +119,3 @@ class SubscriptionAdmin(admin.ModelAdmin):
     list_display = ('user', 'author')
     list_filter = ('user', 'author')
     search_fields = ('user__username', 'author__username')
-
-
-# Кастомная админка для модели ShoppingCart
-@admin.register(ShoppingCart)
-class ShoppingCartAdmin(admin.ModelAdmin):
-    list_display = ('user', 'recipe')
-    list_filter = ('user', 'recipe')
-    search_fields = ('user__username', 'recipe__name')

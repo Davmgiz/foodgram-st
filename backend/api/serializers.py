@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from djoser.serializers import UserCreateSerializer, UserSerializer
+from djoser.serializers import UserSerializer
 from drf_extra_fields.fields import Base64ImageField
 from core.models import (
     Ingredient, Recipe, RecipeIngredient,
@@ -7,9 +7,9 @@ from core.models import (
 )
 
 
-class CustomUserSerializer(UserSerializer):
+class UserProfileSerializer(UserSerializer):
     is_subscribed = serializers.SerializerMethodField()
-    avatar = serializers.SerializerMethodField()
+    avatar = Base64ImageField()
 
     class Meta:
         model = User
@@ -17,13 +17,6 @@ class CustomUserSerializer(UserSerializer):
             'id', 'email', 'username', 'first_name',
             'last_name', 'avatar', 'is_subscribed'
         )
-
-    def get_avatar(self, obj):
-        request = self.context.get('request')
-        if obj.avatar:
-            return request.build_absolute_uri(obj.avatar.url)
-        default_avatar_url = '/media/users/default_avatar.png'
-        return request.build_absolute_uri(default_avatar_url)
 
     def get_is_subscribed(self, obj):
         request = self.context.get('request')
@@ -34,17 +27,7 @@ class CustomUserSerializer(UserSerializer):
         return False
 
 
-class CustomUserCreateSerializer(UserCreateSerializer):
-    class Meta:
-        model = User
-        fields = (
-            'id', 'email', 'username',
-            'first_name', 'last_name', 'password'
-        )
-        extra_kwargs = {'password': {'write_only': True}}
-
-
-class RecipesUserSerializer(CustomUserSerializer):    
+class RecipesUserSerializer(UserProfileSerializer):    
     recipes = serializers.SerializerMethodField()
     recipes_count = serializers.IntegerField(source='recipes.count',
                                              read_only=True)
@@ -58,11 +41,10 @@ class RecipesUserSerializer(CustomUserSerializer):
 
     def get_recipes(self, obj):
         request = self.context.get('request')
-        recipes_limit = request.query_params.get('recipes_limit', 1000)
-        recipes = obj.author.all()[:int(recipes_limit)]
-        serializer = SubscriptionRecipeSerializer(recipes, many=True,
-                                                  context=self.context)
-        return serializer.data
+        recipes_limit = request.query_params.get('recipes_limit', 10**10)
+        recipes = obj.recipes.all()[:int(recipes_limit)]
+        return SubscriptionRecipeSerializer(recipes, many=True,
+                                            context=self.context).data
 
 
 class IngredientSerializer(serializers.ModelSerializer):
@@ -85,7 +67,7 @@ class RecipeIngredientSerializer(serializers.ModelSerializer):
 
 
 class RecipeSerializer(serializers.ModelSerializer):
-    author = CustomUserSerializer(read_only=True)
+    author = UserProfileSerializer(read_only=True)
     ingredients = RecipeIngredientSerializer(
         source='recipe_ingredients', many=True
     )
@@ -104,16 +86,13 @@ class RecipeSerializer(serializers.ModelSerializer):
 
     @staticmethod
     def rec_save(recipe, data):
-        recipe_ingredients = []
-        for ingredient in data:
-            recipe_ingredients.append(
-                RecipeIngredient(
-                    recipe=recipe,
-                    ingredient=ingredient['id'],
-                    amount=ingredient.get('amount')
-                )
-            )
-        RecipeIngredient.objects.bulk_create(recipe_ingredients)
+        RecipeIngredient.objects.bulk_create([
+            RecipeIngredient(
+                recipe=recipe,
+                ingredient=ingredient['id'],
+                amount=ingredient.get('amount')
+            ) for ingredient in data
+        ])
 
     def create(self, validated_data):
         ingredients_data = validated_data.pop('recipe_ingredients')
@@ -162,3 +141,4 @@ class SubscriptionRecipeSerializer(serializers.ModelSerializer):
     class Meta:
         model = Recipe
         fields = ('id', 'name', 'image', 'cooking_time')
+        read_only_fields = ('id', 'name', 'image', 'cooking_time')
