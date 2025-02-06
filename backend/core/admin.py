@@ -1,7 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.utils.safestring import mark_safe
-from django.conf import settings
 from .models import (
     Ingredient,
     Recipe,
@@ -32,7 +31,7 @@ class UserAdmin(BaseUserAdmin):
     @admin.display(description="Аватар")
     @mark_safe
     def avatar_preview(self, user):
-        avatar_url = f"{settings.MEDIA_URL}users/default_avatar.png"
+        avatar_url = "/media/users/default_avatar.png"
         if user.avatar:
             avatar_url = user.avatar.url
         return (
@@ -40,7 +39,7 @@ class UserAdmin(BaseUserAdmin):
             'height="50" style="border-radius: 50%;" />'
         )
 
-    @admin.display(description="Кол-во рецептов")
+    @admin.display(description="Рецептов")
     def recipes_count(self, user):
         return user.recipes.count()
 
@@ -73,14 +72,16 @@ class RecipeAdmin(admin.ModelAdmin):
     search_fields = ('name', 'author__username')
     inlines = [RecipeIngredientInline]
 
-    @admin.display(description="Добавлено в избранное")
+    @admin.display(description="В избранное")
     def favorites_count(self, recipe):
         return recipe.favorites.count()
 
     @admin.display(description="Продукты")
+    @mark_safe
     def ingredients_list(self, recipe):
-        return ", ".join(
-            [ingredient.name for ingredient in recipe.ingredients.all()]
+        return "<br>".join(
+            f"{ingredient.name} ({ingredient.measurement_unit})"
+            for ingredient in recipe.ingredients.all()
         )
 
     @admin.display(description="Фото")
@@ -88,7 +89,7 @@ class RecipeAdmin(admin.ModelAdmin):
     def image_preview(self, recipe):
         if recipe.image:
             return f'<img src="{recipe.image.url}" width="80" height="50" />'
-        return "Нет фото"
+        return ""
 
 
 # Кастомная админка для модели Ingredient
@@ -100,7 +101,7 @@ class IngredientAdmin(admin.ModelAdmin):
     search_fields = ('name', 'measurement_unit')
     list_filter = ('measurement_unit',)
 
-    @admin.display(description="Кол-во рецептов")
+    @admin.display(description="Рецептов")
     def recipes_count(self, ingredient):
         return ingredient.recipes.count()
 

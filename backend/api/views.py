@@ -8,7 +8,8 @@ from django.core.files.base import ContentFile
 import base64
 from core.models import (
     User, Ingredient, Recipe,
-    Favorite, ShoppingCart, Subscription
+    Favorite, ShoppingCart, Subscription,
+    RecipeIngredient
 )
 from api.serializers import (
     UserProfileSerializer,
@@ -27,6 +28,7 @@ from rest_framework import serializers
 from api.permissions import IsOwnerOrReadOnly
 from api.shopping_cart_render import render_shopping_cart
 from django.http import FileResponse
+from django.db.models import Sum
 
 
 class UserManagementViewSet(UserViewSet):
@@ -74,16 +76,13 @@ class UserManagementViewSet(UserViewSet):
     def subscribe(self, request, id=None):
         """Подписка на автора рецептов."""
         author = get_object_or_404(User, pk=id)
-
         if request.user == author:
             raise serializers.ValidationError(
                 "Нельзя подписаться на самого себя."
             )
-
         _, created = Subscription.objects.get_or_create(
             user=request.user, author=author
         )
-
         if not created:
             raise serializers.ValidationError(
                 f"Вы уже подписаны на пользователя {author.username}."
@@ -138,8 +137,8 @@ class RecipeViewSet(viewsets.ModelViewSet):
         recipe = get_object_or_404(Recipe, pk=recipe_id)
 
         if add:
-            obj, created = model.objects.get_or_create(user=user,
-                                                       recipe=recipe)
+            _, created = model.objects.get_or_create(user=user,
+                                                     recipe=recipe)
             if not created:
                 raise serializers.ValidationError(
                     f'Рецепт "{recipe.name}" уже добавлен.'
@@ -147,8 +146,7 @@ class RecipeViewSet(viewsets.ModelViewSet):
             return Response(SubscriptionRecipeSerializer(recipe).data,
                             status=status.HTTP_201_CREATED)
 
-        obj = get_object_or_404(model, user=user, recipe=recipe)
-        obj.delete()
+        get_object_or_404(model, user=user, recipe=recipe).delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=True, methods=['post'],
@@ -173,11 +171,21 @@ class RecipeViewSet(viewsets.ModelViewSet):
             permission_classes=[IsAuthenticated])
     def download_shopping_cart(self, request):
         """Скачивание списка покупок в формате текста."""
+        user = request.user
+        ingredients = (
+            RecipeIngredient.objects
+            .filter(recipe__shopping_carts__user=user)  
+            .values('ingredient__name', 'ingredient__measurement_unit')
+            .annotate(total_amount=Sum('amount'))
+            .order_by('ingredient__name')
+        )
 
-        shopping_cart_file = render_shopping_cart(request.user)
+        recipes = Recipe.objects.filter(shopping_carts__user=user)
+
+        shopping_cart_text = render_shopping_cart(user, ingredients, recipes)
 
         return FileResponse(
-            shopping_cart_file,
+            shopping_cart_text,
             as_attachment=True,
             filename='shopping_list.txt',
             content_type='text/plain'
@@ -188,12 +196,14 @@ class RecipeViewSet(viewsets.ModelViewSet):
         """Генерация короткой ссылки на рецепт."""
 
         if not Recipe.objects.filter(pk=pk).exists():
-            return Response({'error': 'Рецепт не найден'},
+            return Response({'error': f'Рецепт с ID = {pk} не найден'},
                             status=status.HTTP_404_NOT_FOUND)
-        short_url = request.build_absolute_uri(reverse('recipe_redirect',
-                                                       args=[pk]))
-
-        return Response({'short-link': short_url}, status=status.HTTP_200_OK)
+        return Response(
+            {'short-link': request.build_absolute_uri(reverse(
+                'recipe_redirect', args=[pk]
+            ))},
+            status=status.HTTP_200_OK
+        )
 
 
 class IngredientViewSet(viewsets.ReadOnlyModelViewSet):

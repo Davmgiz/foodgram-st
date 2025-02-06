@@ -41,7 +41,7 @@ class RecipesUserSerializer(UserProfileSerializer):
 
     def get_recipes(self, obj):
         request = self.context.get('request')
-        recipes_limit = request.query_params.get('recipes_limit', 10**10)
+        recipes_limit = request.GET.get('recipes_limit', 10**10)
         recipes = obj.recipes.all()[:int(recipes_limit)]
         return SubscriptionRecipeSerializer(recipes, many=True,
                                             context=self.context).data
@@ -141,4 +141,4 @@ class SubscriptionRecipeSerializer(serializers.ModelSerializer):
     class Meta:
         model = Recipe
         fields = ('id', 'name', 'image', 'cooking_time')
-        read_only_fields = ('id', 'name', 'image', 'cooking_time')
+        read_only_fields = fields
